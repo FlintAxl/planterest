@@ -1,13 +1,13 @@
 import React, { useEffect, useReducer, useState } from "react";
 // import "core-js/stable/atob";
 import { jwtDecode } from "jwt-decode"
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { onAuthStateChanged } from "firebase/auth";
 
 import AuthReducer from "../Reducers/Auth.reducer";
 import { setCurrentUser } from "../Actions/Auth.actions";
 import AuthGlobal from './AuthGlobal'
 import { auth } from "../../firebase";
+import { getAuthToken, removeAuthToken } from "../../assets/common/token-storage";
 
 const Auth = props => {
     // console.log(props.children)
@@ -23,14 +23,14 @@ const Auth = props => {
 
         const restoreToken = async () => {
             try {
-                const token = await AsyncStorage.getItem("jwt");
+                const token = await getAuthToken();
                 if (token) {
                     try {
                         const decoded = jwtDecode(token);
                         dispatch(setCurrentUser(decoded));
                     } catch (decodeError) {
                         console.log("Invalid token, clearing", decodeError);
-                        await AsyncStorage.removeItem("jwt");
+                        await removeAuthToken();
                         dispatch(setCurrentUser({}));
                     }
                     setShowChild(true);

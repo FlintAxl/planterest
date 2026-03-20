@@ -7,9 +7,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import Toast from 'react-native-toast-message';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import baseURL from '../../assets/common/baseurl';
+import { getAuthToken } from '../../assets/common/token-storage';
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 const C = {
@@ -156,7 +156,7 @@ const OrderDetails = () => {
   const handleReceiveOrder = async () => {
     setLoading(true);
     try {
-      const token = await AsyncStorage.getItem('jwt');
+      const token = await getAuthToken();
       await axios.put(`${baseURL}orders/${orderId}`, {
         ...order, id: orderId, status: '1',
       }, { headers: { Authorization: `Bearer ${token}` } });
@@ -171,7 +171,7 @@ const OrderDetails = () => {
     if (!cancelReason.trim()) { Alert.alert('Required', 'Please provide a reason.'); return; }
     setLoading(true);
     try {
-      const token = await AsyncStorage.getItem('jwt');
+      const token = await getAuthToken();
       await axios.put(`${baseURL}orders/${orderId}/cancel`, { cancelReason }, { headers: { Authorization: `Bearer ${token}` } });
       Toast.show({ topOffset: 60, type: 'success', text1: 'Order Cancelled' });
       setShowCancelModal(false); setCancelReason('');

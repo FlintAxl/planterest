@@ -44,6 +44,14 @@ const userSchema = new mongoose.Schema({
     country: {
         type: String,
         default: ''
+    },
+    expoPushToken: {
+        type: String,
+        default: ''
+    },
+    expoPushTokenUpdatedAt: {
+        type: Date,
+        default: null
     }
 
 });

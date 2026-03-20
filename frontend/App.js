@@ -12,6 +12,8 @@ import Auth from './Context/Store/Auth';
 import DrawerNavigator from './Navigators/DrawerNavigator';
 import { loadCartFromDatabase } from './Redux/Actions/cartActions';
 import AuthGlobal from './Context/Store/AuthGlobal';
+import { getAuthToken } from './assets/common/token-storage';
+import { registerAndSyncPushToken } from './assets/common/push-notifications';
 
 const CartHydrator = () => {
   const dispatch = useDispatch();
@@ -24,6 +26,28 @@ const CartHydrator = () => {
   useEffect(() => {
     dispatch(loadCartFromDatabase(activeUserId || 'guest'));
   }, [dispatch, activeUserId]);
+
+  useEffect(() => {
+    const syncPushToken = async () => {
+      if (context.stateUser?.isAuthenticated !== true) {
+        return;
+      }
+
+      const userId = context.stateUser?.user?.userId;
+      if (!userId) {
+        return;
+      }
+
+      try {
+        const authToken = await getAuthToken();
+        await registerAndSyncPushToken({ userId, authToken });
+      } catch (error) {
+        console.log('Push token registration failed', error?.message || error);
+      }
+    };
+
+    syncPushToken();
+  }, [context.stateUser?.isAuthenticated, context.stateUser?.user?.userId]);
 
   return null;
 };

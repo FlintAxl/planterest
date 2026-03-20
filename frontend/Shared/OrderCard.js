@@ -15,10 +15,10 @@ import EasyButton from "./StyledComponents/EasyButton";
 import Toast from "react-native-toast-message";
 import { Picker } from "@react-native-picker/picker";
 
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import baseURL from "../assets/common/baseurl";
 import { useNavigation } from "@react-navigation/native";
+import { getAuthToken } from "../assets/common/token-storage";
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 const GOLD        = "#C9A84C";
@@ -129,7 +129,7 @@ const OrderCard = ({ item, update, isCustomer }) => {
 
   // ── API calls ──────────────────────────────────────────────────────────────
   const updateOrder = () => {
-    AsyncStorage.getItem("jwt").then((res) => {
+    getAuthToken().then((res) => {
       const cfg = { headers: { Authorization: `Bearer ${res}` } };
       const order = { city: item.city, country: item.country, dateOrdered: item.dateOrdered,
         id: orderId, orderItems: item.orderItems, phone: item.phone,
@@ -148,7 +148,7 @@ const OrderCard = ({ item, update, isCustomer }) => {
     if (!cancelReason.trim()) { Alert.alert("Required", "Please provide a cancellation reason."); return; }
     setLoading(true);
     try {
-      const token = await AsyncStorage.getItem("jwt");
+      const token = await getAuthToken();
       await axios.put(`${baseURL}orders/${orderId}/cancel`, { cancelReason }, { headers: { Authorization: `Bearer ${token}` } });
       Toast.show({ topOffset: 60, type: "success", text1: "Order Cancelled" });
       setShowCancelModal(false); setCancelReason("");
@@ -161,7 +161,7 @@ const OrderCard = ({ item, update, isCustomer }) => {
   const handleReceiveOrder = async () => {
     setLoading(true);
     try {
-      const token = await AsyncStorage.getItem("jwt");
+      const token = await getAuthToken();
       const order = { city: item.city, country: item.country, dateOrdered: item.dateOrdered,
         id: orderId, orderItems: item.orderItems, phone: item.phone,
         shippingAddress1: item.shippingAddress1, shippingAddress2: item.shippingAddress2,

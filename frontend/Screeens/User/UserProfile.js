@@ -5,13 +5,13 @@ import {
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import mime from 'mime';
 import axios from 'axios';
 import baseURL from '../../assets/common/baseurl';
 import AuthGlobal from '../../Context/Store/AuthGlobal';
 import { logoutUser } from '../../Context/Actions/Auth.actions';
+import { getAuthToken } from '../../assets/common/token-storage';
 
 const { width } = Dimensions.get('window');
 
@@ -165,7 +165,7 @@ const UserProfile = () => {
     if (context.stateUser.isAuthenticated === false) { navigation.navigate('Login'); return; }
     const userId = context.stateUser.user?.userId;
     if (!userId) return;
-    AsyncStorage.getItem('jwt').then(res => {
+    getAuthToken().then(res => {
       if (!res) { navigation.navigate('Login'); return; }
       axios.get(`${baseURL}users/${userId}`, { headers: { Authorization: `Bearer ${res}` } })
         .then(u => setUserProfile(u.data))
@@ -188,7 +188,7 @@ const UserProfile = () => {
     if (!name.trim() || !email.trim() || !phone.trim()) { Alert.alert('Error', 'Name, email, and phone are required.'); return; }
     setSaving(true);
     try {
-      const token  = await AsyncStorage.getItem('jwt');
+      const token  = await getAuthToken();
       const userId = context.stateUser.user?.userId;
       const fd     = new FormData();
       fd.append('name', name); fd.append('email', email); fd.append('phone', phone);
@@ -348,7 +348,7 @@ const UserProfile = () => {
           icon="log-out-outline"
           label="Sign Out"
           danger
-          onPress={() => { AsyncStorage.removeItem('jwt'); logoutUser(context.dispatch); }}
+          onPress={() => { logoutUser(context.dispatch); }}
         />
 
         <View style={{ height: 32 }} />

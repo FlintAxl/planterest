@@ -2,6 +2,8 @@ const { Order } = require('../models/order');
 const express = require('express');
 const { OrderItem } = require('../models/order-item');
 const { Product } = require('../models/product');
+const { User } = require('../models/user');
+const { sendOrderStatusNotification } = require('../helpers/push-notifications');
 const router = express.Router();
 
 const computeOrderTotalFromItems = async (orderItems = []) => {
@@ -122,18 +124,40 @@ router.post('/', async (req, res) => {
 
 
 router.put('/:id', async (req, res) => {
-    const order = await Order.findByIdAndUpdate(
-        req.params.id,
-        {
-            status: req.body.status
-        },
-        { new: true }
-    )
+    try {
+        const order = await Order.findByIdAndUpdate(
+            req.params.id,
+            {
+                status: req.body.status
+            },
+            { new: true }
+        )
 
-    if (!order)
-        return res.status(400).send('the order cannot be update!')
+        if (!order)
+            return res.status(400).send('the order cannot be update!')
 
-    res.send(order);
+        const orderWithUserToken = await Order.findById(order.id).populate('user', 'expoPushToken');
+        const expoPushToken = orderWithUserToken?.user?.expoPushToken;
+
+        if (expoPushToken) {
+            const pushResult = await sendOrderStatusNotification({
+                expoPushToken,
+                orderId: order.id,
+                status: order.status,
+            });
+
+            if (pushResult.shouldRemoveToken && orderWithUserToken?.user?._id) {
+                await User.findByIdAndUpdate(orderWithUserToken.user._id, {
+                    expoPushToken: '',
+                    expoPushTokenUpdatedAt: new Date(),
+                });
+            }
+        }
+
+        res.send(order);
+    } catch (error) {
+        return res.status(500).json({ success: false, error: error.message });
+    }
 })
 
 router.put('/:id/cancel', async (req, res) => {

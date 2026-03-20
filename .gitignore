@@ -86,6 +86,8 @@ frontend/.kotlin/
 frontend/.metro-health-check*
 frontend/ios/
 frontend/android/
+frontend/google-services.json
+frontend/planterest-v1-firebase-adminsdk-fbsvc-f6a1f16396.json
 
 # Native signing/provisioning files
 *.orig.*

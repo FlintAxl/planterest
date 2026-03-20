@@ -5,11 +5,11 @@ import {
 } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import baseURL from '../../assets/common/baseurl';
 import AuthGlobal from '../../Context/Store/AuthGlobal';
 import OrderCard from '../../Shared/OrderCard';
+import { getAuthToken } from '../../assets/common/token-storage';
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 const C = {
@@ -111,14 +111,14 @@ const MyOrders = () => {
       }
 
       setLoading(true);
-      AsyncStorage.getItem('jwt').then(fetchOrders).catch(err => { console.log(err); setLoading(false); });
+      getAuthToken().then(fetchOrders).catch(err => { console.log(err); setLoading(false); });
       return () => setOrders([]);
     }, [context.stateUser.isAuthenticated, context.stateUser.user])
   );
 
   const onRefresh = () => {
     setRefreshing(true);
-    AsyncStorage.getItem('jwt').then(fetchOrders).catch(() => setRefreshing(false));
+    getAuthToken().then(fetchOrders).catch(() => setRefreshing(false));
   };
 
   // ── Header card — injected as ListHeaderComponent so it scrolls ─────────────

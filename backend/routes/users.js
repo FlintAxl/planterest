@@ -128,6 +128,79 @@ router.post('/login', async (req, res) => {
 
 })
 
+router.put('/:id/push-token', async (req, res) => {
+    try {
+        const authUserId = req.auth?.userId;
+        const isAdmin = req.auth?.isAdmin === true;
+
+        if (!authUserId) {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
+
+        if (!isAdmin && String(authUserId) !== String(req.params.id)) {
+            return res.status(403).json({ message: 'Forbidden' });
+        }
+
+        const expoPushToken = String(req.body.expoPushToken || '').trim();
+        if (!expoPushToken.startsWith('ExponentPushToken[') && !expoPushToken.startsWith('ExpoPushToken[')) {
+            return res.status(400).json({ message: 'Invalid Expo push token format' });
+        }
+
+        const user = await User.findByIdAndUpdate(
+            req.params.id,
+            {
+                expoPushToken,
+                expoPushTokenUpdatedAt: new Date(),
+            },
+            { new: true }
+        ).select('-passwordHash');
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        return res.status(200).json({
+            success: true,
+            expoPushToken: user.expoPushToken,
+            expoPushTokenUpdatedAt: user.expoPushTokenUpdatedAt,
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, error: error.message });
+    }
+})
+
+router.delete('/:id/push-token', async (req, res) => {
+    try {
+        const authUserId = req.auth?.userId;
+        const isAdmin = req.auth?.isAdmin === true;
+
+        if (!authUserId) {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
+
+        if (!isAdmin && String(authUserId) !== String(req.params.id)) {
+            return res.status(403).json({ message: 'Forbidden' });
+        }
+
+        const user = await User.findByIdAndUpdate(
+            req.params.id,
+            {
+                expoPushToken: '',
+                expoPushTokenUpdatedAt: new Date(),
+            },
+            { new: true }
+        ).select('-passwordHash');
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        return res.status(200).json({ success: true });
+    } catch (error) {
+        return res.status(500).json({ success: false, error: error.message });
+    }
+})
+
 
 router.post('/register', uploadOptions.single('image'), async (req, res) => {
     const file = req.file;

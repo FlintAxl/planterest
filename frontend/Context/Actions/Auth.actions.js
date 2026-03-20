@@ -1,10 +1,11 @@
 // import "core-js/stable/atob";
 import { jwtDecode } from "jwt-decode"
-import AsyncStorage from "@react-native-async-storage/async-storage"
 import Toast from "react-native-toast-message"
 import baseURL from "../../assets/common/baseurl";
 import { GoogleAuthProvider, signInWithCredential, signOut } from "firebase/auth";
 import { auth } from "../../firebase";
+import { getAuthToken, removeAuthToken, setAuthToken } from "../../assets/common/token-storage";
+import { removePushTokenOnServer } from "../../assets/common/push-notifications";
 
 export const SET_CURRENT_USER = "SET_CURRENT_USER";
 
@@ -27,7 +28,7 @@ export const loginUser = (user, dispatch) => {
         .then((data) => {
             if (data && data.token) {
                 // Store token first
-                AsyncStorage.setItem("jwt", data.token)
+                setAuthToken(data.token)
                     .then(() => {
                         // Then decode and dispatch
                         const decoded = jwtDecode(data.token);
@@ -118,11 +119,27 @@ export const getUserProfile = (id) => {
 }
 
 export const logoutUser = (dispatch) => {
-    AsyncStorage.removeItem("jwt");
-    signOut(auth).catch(() => {
-        // Ignore sign-out errors when no Firebase session exists.
-    });
-    dispatch(setCurrentUser({}))
+    getAuthToken()
+        .then(async (token) => {
+            if (token) {
+                const decoded = jwtDecode(token);
+                if (decoded?.userId) {
+                    try {
+                        await removePushTokenOnServer({ userId: decoded.userId, authToken: token });
+                    } catch (error) {
+                        console.log("Failed to remove push token on logout", error?.message || error);
+                    }
+                }
+            }
+
+            await removeAuthToken();
+        })
+        .finally(() => {
+            signOut(auth).catch(() => {
+                // Ignore sign-out errors when no Firebase session exists.
+            });
+            dispatch(setCurrentUser({}))
+        });
 }
 
 export const setCurrentUser = (decoded, user) => {
