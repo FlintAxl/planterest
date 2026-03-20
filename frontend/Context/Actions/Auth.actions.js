@@ -3,6 +3,8 @@ import { jwtDecode } from "jwt-decode"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import Toast from "react-native-toast-message"
 import baseURL from "../../assets/common/baseurl";
+import { GoogleAuthProvider, signInWithCredential, signOut } from "firebase/auth";
+import { auth } from "../../firebase";
 
 export const SET_CURRENT_USER = "SET_CURRENT_USER";
 
@@ -65,6 +67,43 @@ export const loginUser = (user, dispatch) => {
         });
 };
 
+export const loginWithGoogle = async (idToken, dispatch) => {
+    try {
+        const googleCredential = GoogleAuthProvider.credential(idToken);
+        const userCredential = await signInWithCredential(auth, googleCredential);
+        const firebaseUser = userCredential.user;
+
+        const normalizedUser = {
+            sub: firebaseUser.uid,
+            email: firebaseUser.email,
+            name: firebaseUser.displayName,
+            picture: firebaseUser.photoURL,
+            provider: "google",
+        };
+
+        dispatch(setCurrentUser(normalizedUser, {
+            email: firebaseUser.email,
+            name: firebaseUser.displayName,
+        }));
+
+        Toast.show({
+            topOffset: 60,
+            type: "success",
+            text1: "Signed in with Google",
+            text2: "Welcome back!",
+        });
+    } catch (err) {
+        console.log("Google login error:", err);
+        Toast.show({
+            topOffset: 60,
+            type: "error",
+            text1: "Google sign-in failed",
+            text2: "Please try again",
+        });
+        throw err;
+    }
+};
+
 export const getUserProfile = (id) => {
     fetch(`${baseURL}users/${id}`, {
         method: "GET",
@@ -80,6 +119,9 @@ export const getUserProfile = (id) => {
 
 export const logoutUser = (dispatch) => {
     AsyncStorage.removeItem("jwt");
+    signOut(auth).catch(() => {
+        // Ignore sign-out errors when no Firebase session exists.
+    });
     dispatch(setCurrentUser({}))
 }
 

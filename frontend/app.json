@@ -2,6 +2,7 @@
   "expo": {
     "name": "Planterest",
     "slug": "Planterest",
+    "scheme": "planterest",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -21,13 +22,14 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.flintaxl.Planterest"
+      "package": "com.flintaxl.PlanterestApp"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-web-browser"
     ]
   }
 }

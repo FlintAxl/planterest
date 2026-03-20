@@ -15,9 +15,13 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Ionicons } from "@expo/vector-icons";
+import * as WebBrowser from "expo-web-browser";
+import * as Google from "expo-auth-session/providers/google";
 
 import AuthGlobal from '../../Context/Store/AuthGlobal'
-import { loginUser } from '../../Context/Actions/Auth.actions'
+import { loginUser, loginWithGoogle } from '../../Context/Actions/Auth.actions'
+
+WebBrowser.maybeCompleteAuthSession();
 
 const { width, height } = Dimensions.get('window');
 
@@ -29,6 +33,17 @@ const Login = (props) => {
     const [error, setError] = useState("")
     const [showPassword, setShowPassword] = useState(false)
     const [rememberMe, setRememberMe] = useState(false)
+    const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+    const proxyRedirectUri = "https://auth.expo.io/@flintaxl/Planterest";
+
+    const [request, response, promptAsync] = Google.useAuthRequest({
+        expoClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+        webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+        androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+        scopes: ["profile", "email"],
+        responseType: "id_token",
+        redirectUri: proxyRedirectUri,
+    });
 
     const handleSubmit = () => {
         const user = {
@@ -48,6 +63,54 @@ const Login = (props) => {
             navigation.replace("User Profile")
         }
     }, [context.stateUser.isAuthenticated, navigation])
+
+    useEffect(() => {
+        const handleGoogleResponse = async () => {
+            if (!response) return;
+
+            if (response.type !== "success") {
+                if (response.type !== "dismiss" && response.type !== "cancel") {
+                    setError("Google sign-in was not completed");
+                }
+                return;
+            }
+
+            const idToken = response.authentication?.idToken || response.params?.id_token;
+
+            if (!idToken) {
+                setError("Google did not return an ID token");
+                return;
+            }
+
+            try {
+                setError("");
+                setIsGoogleLoading(true);
+                await loginWithGoogle(idToken, context.dispatch);
+            } catch (googleError) {
+                console.log("Google auth flow error:", googleError);
+                setError("Google sign-in failed. Please try again.");
+            } finally {
+                setIsGoogleLoading(false);
+            }
+        };
+
+        handleGoogleResponse();
+    }, [response, context.dispatch]);
+
+    const handleGoogleSignIn = async () => {
+        setError("");
+        try {
+            setIsGoogleLoading(true);
+            await promptAsync({
+                useProxy: true,
+                redirectUri: proxyRedirectUri,
+            });
+        } catch (promptError) {
+            console.log("Google prompt error:", promptError);
+            setError("Unable to open Google sign-in");
+            setIsGoogleLoading(false);
+        }
+    };
 
     return (
         <View style={styles.container}>
@@ -135,6 +198,18 @@ const Login = (props) => {
                         {/* Login Button */}
                         <TouchableOpacity style={styles.loginButton} onPress={handleSubmit}>
                             <Text style={styles.loginButtonText}>Login</Text>
+                        </TouchableOpacity>
+
+                        {/* Google Sign In */}
+                        <TouchableOpacity
+                            style={[styles.googleButton, (!request || isGoogleLoading) && styles.googleButtonDisabled]}
+                            onPress={handleGoogleSignIn}
+                            disabled={!request || isGoogleLoading}
+                        >
+                            <Ionicons name="logo-google" size={20} color="#2E7D32" style={styles.googleIcon} />
+                            <Text style={styles.googleButtonText}>
+                                {isGoogleLoading ? "Signing in..." : "Continue with Google"}
+                            </Text>
                         </TouchableOpacity>
 
                         {/* Sign Up Link */}
@@ -268,6 +343,28 @@ const styles = StyleSheet.create({
     loginButtonText: {
         color: '#fff',
         fontSize: 18,
+        fontWeight: '600',
+    },
+    googleButton: {
+        borderWidth: 1,
+        borderColor: '#2E7D32',
+        borderRadius: 25,
+        height: 55,
+        justifyContent: 'center',
+        alignItems: 'center',
+        flexDirection: 'row',
+        marginBottom: 20,
+        backgroundColor: '#fff',
+    },
+    googleButtonDisabled: {
+        opacity: 0.6,
+    },
+    googleIcon: {
+        marginRight: 8,
+    },
+    googleButtonText: {
+        color: '#2E7D32',
+        fontSize: 16,
         fontWeight: '600',
     },
     signupContainer: {
