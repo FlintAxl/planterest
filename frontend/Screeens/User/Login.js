@@ -13,17 +13,13 @@ import {
     ScrollView
 } from 'react-native'
 import { useNavigation } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { Ionicons } from "@expo/vector-icons";
-import * as WebBrowser from "expo-web-browser";
-import * as Google from "expo-auth-session/providers/google";
+import { GoogleSignin, statusCodes } from "@react-native-google-signin/google-signin";
 
 import AuthGlobal from '../../Context/Store/AuthGlobal'
 import { loginUser, loginWithGoogle } from '../../Context/Actions/Auth.actions'
 
-WebBrowser.maybeCompleteAuthSession();
-
-const { width, height } = Dimensions.get('window');
+const { height } = Dimensions.get('window');
 
 const Login = (props) => {
     const context = useContext(AuthGlobal)
@@ -34,16 +30,14 @@ const Login = (props) => {
     const [showPassword, setShowPassword] = useState(false)
     const [rememberMe, setRememberMe] = useState(false)
     const [isGoogleLoading, setIsGoogleLoading] = useState(false)
-    const proxyRedirectUri = "https://auth.expo.io/@flintaxl/Planterest";
 
-    const [request, response, promptAsync] = Google.useAuthRequest({
-        expoClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-        webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
-        androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
-        scopes: ["profile", "email"],
-        responseType: "id_token",
-        redirectUri: proxyRedirectUri,
-    });
+    useEffect(() => {
+        GoogleSignin.configure({
+            webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+            offlineAccess: false,
+            forceCodeForRefreshToken: false,
+        });
+    }, []);
 
     const handleSubmit = () => {
         const user = {
@@ -64,50 +58,30 @@ const Login = (props) => {
         }
     }, [context.stateUser.isAuthenticated, navigation])
 
-    useEffect(() => {
-        const handleGoogleResponse = async () => {
-            if (!response) return;
-
-            if (response.type !== "success") {
-                if (response.type !== "dismiss" && response.type !== "cancel") {
-                    setError("Google sign-in was not completed");
-                }
-                return;
-            }
-
-            const idToken = response.authentication?.idToken || response.params?.id_token;
-
-            if (!idToken) {
-                setError("Google did not return an ID token");
-                return;
-            }
-
-            try {
-                setError("");
-                setIsGoogleLoading(true);
-                await loginWithGoogle(idToken, context.dispatch);
-            } catch (googleError) {
-                console.log("Google auth flow error:", googleError);
-                setError("Google sign-in failed. Please try again.");
-            } finally {
-                setIsGoogleLoading(false);
-            }
-        };
-
-        handleGoogleResponse();
-    }, [response, context.dispatch]);
-
     const handleGoogleSignIn = async () => {
         setError("");
         try {
             setIsGoogleLoading(true);
-            await promptAsync({
-                useProxy: true,
-                redirectUri: proxyRedirectUri,
-            });
+            await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+            await GoogleSignin.signOut();
+            const signInResult = await GoogleSignin.signIn();
+            const idToken = signInResult?.data?.idToken || signInResult?.idToken;
+
+            if (!idToken) {
+                throw new Error("Google did not return an ID token");
+            }
+
+            await loginWithGoogle(idToken, context.dispatch);
         } catch (promptError) {
             console.log("Google prompt error:", promptError);
-            setError("Unable to open Google sign-in");
+            if (promptError?.code === statusCodes.SIGN_IN_CANCELLED) {
+                setError("Google sign-in was cancelled");
+            } else if (promptError?.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+                setError("Google Play Services is not available or outdated");
+            } else {
+                setError(promptError?.message || "Unable to sign in with Google");
+            }
+        } finally {
             setIsGoogleLoading(false);
         }
     };
@@ -202,9 +176,9 @@ const Login = (props) => {
 
                         {/* Google Sign In */}
                         <TouchableOpacity
-                            style={[styles.googleButton, (!request || isGoogleLoading) && styles.googleButtonDisabled]}
+                            style={[styles.googleButton, isGoogleLoading && styles.googleButtonDisabled]}
                             onPress={handleGoogleSignIn}
-                            disabled={!request || isGoogleLoading}
+                            disabled={isGoogleLoading}
                         >
                             <Ionicons name="logo-google" size={20} color="#2E7D32" style={styles.googleIcon} />
                             <Text style={styles.googleButtonText}>

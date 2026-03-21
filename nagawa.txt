@@ -42,10 +42,8 @@ unit 2 node backend functions, jwt tokens stored on SQLite or expo secure store.
 
 
     MGA DI PA NAGAGAWA
-    google/facebook login, 20pts
+    google/facebook login, 20pts -- ETO NALNG
 
-    send a push notification after the update. 10pts
-    click on the notification to view the order details 10pts
+    
 
-    unit 2 node backend functions, jwt tokens stored on SQLite or expo secure store.
-    notification push token saved on user model. update/remove stale tokens 20pts
+   

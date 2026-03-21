@@ -4,8 +4,12 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
+const crypto = require('crypto');
+const { OAuth2Client } = require('google-auth-library');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const cloudinary = require('../helpers/cloudinary');
+
+const googleClient = new OAuth2Client();
 
 const storage = new CloudinaryStorage({
     cloudinary,
@@ -127,6 +131,69 @@ router.post('/login', async (req, res) => {
 
 
 })
+
+router.post('/google-login', async (req, res) => {
+    try {
+        const idToken = String(req.body?.idToken || '').trim();
+        if (!idToken) {
+            return res.status(400).json({ message: 'Google ID token is required' });
+        }
+
+        const audiences = [
+            process.env.GOOGLE_WEB_CLIENT_ID,
+            process.env.GOOGLE_ANDROID_CLIENT_ID,
+            process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+            process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+        ].filter(Boolean);
+
+        if (!audiences.length) {
+            return res.status(500).json({ message: 'Google OAuth client IDs are not configured' });
+        }
+
+        const ticket = await googleClient.verifyIdToken({
+            idToken,
+            audience: audiences,
+        });
+
+        const payload = ticket.getPayload();
+        if (!payload?.email || !payload.email_verified) {
+            return res.status(401).json({ message: 'Google account email is not verified' });
+        }
+
+        let user = await User.findOne({ email: payload.email.toLowerCase() });
+
+        if (!user) {
+            const generatedPasswordHash = bcrypt.hashSync(crypto.randomBytes(24).toString('hex'), 10);
+
+            user = new User({
+                name: payload.name || payload.email,
+                email: payload.email.toLowerCase(),
+                passwordHash: generatedPasswordHash,
+                image: payload.picture || '',
+                phone: '0000000000',
+            });
+
+            user = await user.save();
+        }
+
+        const secret = process.env.secret;
+        const token = jwt.sign(
+            {
+                userId: user.id,
+                isAdmin: user.isAdmin,
+            },
+            secret,
+            { expiresIn: '1d' }
+        );
+
+        return res.status(200).json({
+            user: user.email,
+            token,
+        });
+    } catch (error) {
+        return res.status(401).json({ message: 'Invalid Google token', error: error.message });
+    }
+});
 
 router.put('/:id/push-token', async (req, res) => {
     try {

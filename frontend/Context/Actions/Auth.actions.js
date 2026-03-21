@@ -74,8 +74,31 @@ export const loginWithGoogle = async (idToken, dispatch) => {
         const userCredential = await signInWithCredential(auth, googleCredential);
         const firebaseUser = userCredential.user;
 
+        const response = await fetch(`${baseURL}users/google-login`, {
+            method: "POST",
+            headers: {
+                Accept: "application/json",
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ idToken }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Google backend login failed with status ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (!data?.token) {
+            throw new Error("Backend did not return an auth token");
+        }
+
+        await setAuthToken(data.token);
+        const decoded = jwtDecode(data.token);
+
         const normalizedUser = {
-            sub: firebaseUser.uid,
+            sub: decoded.userId || firebaseUser.uid,
+            userId: decoded.userId,
+            isAdmin: decoded.isAdmin,
             email: firebaseUser.email,
             name: firebaseUser.displayName,
             picture: firebaseUser.photoURL,

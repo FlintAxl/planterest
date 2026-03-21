@@ -31,6 +31,7 @@ function authJwt() {
                     methods: ['GET', 'OPTIONS']
                 },
                 `${api}/users/login`,
+                `${api}/users/google-login`,
                 `${api}/users/register`,
             ]
         })
