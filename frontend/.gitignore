@@ -42,5 +42,4 @@ yarn-error.*
 /android
 
 # Firebase config and admin credentials
-google-services.json
 planterest-v1-firebase-adminsdk-fbsvc-f6a1f16396.json

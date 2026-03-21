@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "422973096540",
+    "project_id": "planterest-v1",
+    "storage_bucket": "planterest-v1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:422973096540:android:c83247f483f8e053575c99",
+        "android_client_info": {
+          "package_name": "com.flintaxl.PlanterestApp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "422973096540-jvs4qd98hgfbd07vltb6a2j1rfn4ip3i.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.flintaxl.PlanterestApp",
+            "certificate_hash": "bef506a98a56451a8569abdedc6dc4f7011a6946"
+          }
+        },
+        {
+          "client_id": "422973096540-58gntq3j9kilgr9iec33l350s7859i4a.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCxnIVY6Ydgq_BJxq9_F9UizhaxkUDTriA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "422973096540-58gntq3j9kilgr9iec33l350s7859i4a.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
