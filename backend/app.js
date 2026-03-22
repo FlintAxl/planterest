@@ -55,13 +55,14 @@ const productsRoutes = require("./routes/products");
 const usersRoutes = require("./routes/users");
 const ordersRoutes = require("./routes/orders");
 const reviewsRoutes = require("./routes/reviews");
-app.use(authJwt());
-
-const api = process.env.API_URL;
 
 app.get('/healthz', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });
+
+app.use(authJwt());
+
+const api = process.env.API_URL;
 
 app.use(`${api}/categories`, categoriesRoutes);
 app.use(`${api}/products`, productsRoutes);
