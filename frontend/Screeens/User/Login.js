@@ -10,7 +10,8 @@ import {
     StatusBar,
     KeyboardAvoidingView,
     Platform,
-    ScrollView
+    ScrollView,
+    Alert
 } from 'react-native'
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from "@expo/vector-icons";
@@ -48,7 +49,23 @@ const Login = (props) => {
         if (email === "" || password === "") {
             setError("Please fill in your credentials");
         } else {
-            loginUser(user, context.dispatch);
+            loginUser(user, context.dispatch).catch((loginError) => {
+                const isDeactivated = loginError?.code === "DEACTIVATED";
+
+                if (isDeactivated) {
+                    const message = loginError?.message || "Your account is deactivated. Please contact an administrator.";
+                    Alert.alert("Account Deactivated", message, [
+                        {
+                            text: "OK",
+                            onPress: () => navigation.replace("Login"),
+                        },
+                    ]);
+                    setError(message);
+                    return;
+                }
+
+                setError("Please provide correct credentials");
+            });
         }
     };
 
@@ -74,6 +91,18 @@ const Login = (props) => {
             await loginWithGoogle(idToken, context.dispatch);
         } catch (promptError) {
             console.log("Google prompt error:", promptError);
+            if (promptError?.code === "DEACTIVATED") {
+                const message = promptError?.message || "Your account is deactivated. Please contact an administrator.";
+                Alert.alert("Account Deactivated", message, [
+                    {
+                        text: "OK",
+                        onPress: () => navigation.replace("Login"),
+                    },
+                ]);
+                setError(message);
+                return;
+            }
+
             if (promptError?.code === statusCodes.SIGN_IN_CANCELLED) {
                 setError("Google sign-in was cancelled");
             } else if (promptError?.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {

@@ -8,13 +8,32 @@ const errorHandler = require('./helpers/error-handler');
 require("dotenv/config");
 
 // CORS Configuration
+const defaultAllowedOrigins = [
+  "https://charriest-lesia-laggardly.ngrok-free.dev",
+  "http://localhost:4000",
+  "http://192.168.100.97:4000",
+  "http://192.168.70.178:4000",
+];
+
+const envAllowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim()).filter(Boolean)
+  : [];
+
+const allowedOrigins = envAllowedOrigins.length > 0 ? envAllowedOrigins : defaultAllowedOrigins;
+
 const corsOptions = {
-  origin: [
-    "https://charriest-lesia-laggardly.ngrok-free.dev",
-    "http://localhost:4000",
-    "http://192.168.100.97:4000",
-    "http://192.168.70.178:4000"
-  ],  
+  origin: (origin, callback) => {
+    // Allow requests from mobile apps, Postman, and server-to-server calls without an Origin header.
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error("Not allowed by CORS"));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -40,6 +59,10 @@ app.use(authJwt());
 
 const api = process.env.API_URL;
 
+app.get('/healthz', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
 app.use(`${api}/categories`, categoriesRoutes);
 app.use(`${api}/products`, productsRoutes);
 app.use(`${api}/users`, usersRoutes);
@@ -60,8 +83,9 @@ mongoose
   });
 
 //Server
-// Server - Listen on all network interfaces
-app.listen(4000, '0.0.0.0', () => {
-  console.log("server is running http://localhost:4000");
+const port = process.env.PORT || 4000;
+
+app.listen(port, '0.0.0.0', () => {
+  console.log(`server is running on port ${port}`);
   console.log("connected na sya pre");
 });

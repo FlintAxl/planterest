@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Platform,
   ScrollView,
+  Alert,
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { Ionicons } from "@expo/vector-icons";
@@ -67,7 +68,7 @@ const CornerRings = ({ size = 80, color = C.goldBorder }) => (
 );
 
 /** Labelled field wrapper */
-const FieldWrap = ({ icon, label, required, children, style }) => (
+const FieldWrap = ({ icon, label, required, error, children, style }) => (
   <View style={[fw.wrap, style]}>
     <View style={fw.labelRow}>
       <View style={fw.iconPip}>
@@ -77,6 +78,7 @@ const FieldWrap = ({ icon, label, required, children, style }) => (
       {required && <Text style={fw.required}>*</Text>}
     </View>
     {children}
+    {!!error && <Text style={fw.errorText}>{error}</Text>}
   </View>
 );
 const fw = StyleSheet.create({
@@ -85,6 +87,7 @@ const fw = StyleSheet.create({
   iconPip:  { width: 20, height: 20, borderRadius: 10, backgroundColor: C.goldLight, alignItems: "center", justifyContent: "center" },
   labelText:{ fontSize: 10, fontWeight: "800", color: C.greenMid, textTransform: "uppercase", letterSpacing: 0.9, flex: 1 },
   required: { fontSize: 12, color: C.gold, fontWeight: "900" },
+  errorText:{ marginTop: 6, fontSize: 11, color: "#C62828", fontWeight: "700" },
 });
 
 /** Section heading with badge */
@@ -126,6 +129,7 @@ const ProductForm = (props) => {
   const [richDescription,setRichDescription]= useState("");
   const [numReviews,     setNumReviews]     = useState(0);
   const [item,           setItem]           = useState(null);
+  const [fieldErrors,    setFieldErrors]    = useState({});
 
   const navigation = useNavigation();
   const isEditing  = item !== null;
@@ -167,15 +171,81 @@ const ProductForm = (props) => {
     if (!result.canceled) {
       setMainImage(result.assets[0].uri);
       setImage(result.assets[0].uri);
+      setFieldErrors((prev) => ({ ...prev, image: null }));
     }
   };
 
+  const takePhoto = async () => {
+    const permission = await ImagePicker.getCameraPermissionsAsync();
+    if (!permission.granted) {
+      const request = await ImagePicker.requestCameraPermissionsAsync();
+      if (!request.granted) {
+        Alert.alert("Camera permission needed", "Please allow camera access to take a photo.");
+        return;
+      }
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 1,
+    });
+
+    if (!result.canceled) {
+      setMainImage(result.assets[0].uri);
+      setImage(result.assets[0].uri);
+      setFieldErrors((prev) => ({ ...prev, image: null }));
+    }
+  };
+
+  const showImageOptions = () => {
+    Alert.alert(
+      "Product Image",
+      "Choose image source",
+      [
+        { text: "Take Photo", onPress: takePhoto },
+        { text: "Upload from Gallery", onPress: pickImage },
+        { text: "Cancel", style: "cancel" },
+      ]
+    );
+  };
+
+  const validateForm = () => {
+    const nextErrors = {};
+    const trimmedName = (name || "").trim();
+    const trimmedBrand = (brand || "").trim();
+    const trimmedDescription = (description || "").trim();
+    const hasImage = !!(mainImage || image);
+
+    if (!trimmedBrand) nextErrors.brand = "Brand is required.";
+    if (!trimmedName) nextErrors.name = "Product name is required.";
+    if (!price || Number.isNaN(Number(price)) || Number(price) <= 0) nextErrors.price = "Enter a valid price greater than 0.";
+    if (!countInStock || Number.isNaN(Number(countInStock)) || Number(countInStock) < 0) nextErrors.countInStock = "Enter a valid stock quantity.";
+    if (!trimmedDescription) nextErrors.description = "Description is required.";
+    if (!category) nextErrors.category = "Please select a category.";
+    if (!hasImage) nextErrors.image = "Product image is required.";
+
+    setFieldErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length > 0) {
+      setError("Please complete all required fields before saving.");
+      Toast.show({
+        topOffset: 60,
+        type: "error",
+        text1: "Form incomplete",
+        text2: "Fill all required fields marked with errors.",
+      });
+      return false;
+    }
+
+    setError(null);
+    return true;
+  };
+
   const addProduct = () => {
-    if (!name || !brand || !price || !description || !category || !countInStock) {
-      setError("Please fill in all required fields.");
+    if (!validateForm()) {
       return;
     }
-    setError(null);
 
     const formData = new FormData();
     const newImageUri = image ? "file:///" + image.split("file:/").join("") : "";
@@ -257,15 +327,16 @@ const ProductForm = (props) => {
           </View>
 
           {/* Camera button */}
-          <TouchableOpacity style={styles.cameraBtn} onPress={pickImage} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.cameraBtn} onPress={showImageOptions} activeOpacity={0.85}>
             <Ionicons name="camera" size={16} color={C.greenDark} />
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.uploadChip} onPress={pickImage} activeOpacity={0.85}>
+        <TouchableOpacity style={[styles.uploadChip, !!fieldErrors.image && styles.invalidOutline]} onPress={showImageOptions} activeOpacity={0.85}>
           <Ionicons name="cloud-upload-outline" size={14} color={C.gold} />
           <Text style={styles.uploadChipText}>{mainImage ? "Change photo" : "Upload photo"}</Text>
         </TouchableOpacity>
+        {!!fieldErrors.image && <Text style={styles.inlineErrorText}>{fieldErrors.image}</Text>}
       </View>
 
       {/* ══════ BASIC INFO CARD ══════ */}
@@ -274,52 +345,79 @@ const ProductForm = (props) => {
         <SectionHeading icon="cube-outline" title="Basic Information" badge="REQUIRED" />
         <GoldDivider style={{ marginTop: 8 }} />
 
-        <FieldWrap icon="storefront-outline" label="Brand" required>
+        <FieldWrap icon="storefront-outline" label="Brand" required error={fieldErrors.brand}>
           <Input
             placeholder="e.g. Green Roots"
             name="brand" id="brand"
             value={brand}
-            onChangeText={setBrand}
+            hasError={!!fieldErrors.brand}
+            style={styles.inputFull}
+            onChangeText={(value) => {
+              setBrand(value);
+              setFieldErrors((prev) => ({ ...prev, brand: null }));
+            }}
           />
         </FieldWrap>
 
-        <FieldWrap icon="leaf-outline" label="Product Name" required>
+        <FieldWrap icon="leaf-outline" label="Product Name" required error={fieldErrors.name}>
           <Input
             placeholder="e.g. Peace Lily"
             name="name" id="name"
             value={name}
-            onChangeText={setName}
+            hasError={!!fieldErrors.name}
+            style={styles.inputFull}
+            onChangeText={(value) => {
+              setName(value);
+              setFieldErrors((prev) => ({ ...prev, name: null }));
+            }}
           />
         </FieldWrap>
 
         {/* Price + Stock row */}
         <View style={styles.rowFields}>
-          <FieldWrap icon="cash-outline" label="Price" required style={{ flex: 1, marginRight: 10 }}>
+          <FieldWrap icon="cash-outline" label="Price" required error={fieldErrors.price} style={{ flex: 1, marginRight: 10 }}>
             <Input
               placeholder="0.00"
               name="price" id="price"
               value={price}
               keyboardType="numeric"
-              onChangeText={setPrice}
+              hasError={!!fieldErrors.price}
+              style={styles.inputFull}
+              onChangeText={(value) => {
+                setPrice(value);
+                setFieldErrors((prev) => ({ ...prev, price: null }));
+              }}
             />
           </FieldWrap>
-          <FieldWrap icon="layers-outline" label="In Stock" required style={{ flex: 1 }}>
+          <FieldWrap icon="layers-outline" label="In Stock" required error={fieldErrors.countInStock} style={{ flex: 1 }}>
             <Input
               placeholder="0"
               name="stock" id="stock"
               value={countInStock}
               keyboardType="numeric"
-              onChangeText={setCountInStock}
+              hasError={!!fieldErrors.countInStock}
+              style={styles.inputFull}
+              onChangeText={(value) => {
+                setCountInStock(value);
+                setFieldErrors((prev) => ({ ...prev, countInStock: null }));
+              }}
             />
           </FieldWrap>
         </View>
 
-        <FieldWrap icon="document-text-outline" label="Description" required>
+        <FieldWrap icon="document-text-outline" label="Description" required error={fieldErrors.description}>
           <Input
             placeholder="Describe the product…"
             name="description" id="description"
             value={description}
-            onChangeText={setDescription}
+            hasError={!!fieldErrors.description}
+            style={[styles.inputFull, styles.descriptionInput]}
+            multiline
+            numberOfLines={3}
+            onChangeText={(value) => {
+              setDescription(value);
+              setFieldErrors((prev) => ({ ...prev, description: null }));
+            }}
           />
         </FieldWrap>
       </View>
@@ -330,15 +428,19 @@ const ProductForm = (props) => {
         <SectionHeading icon="grid-outline" title="Category" />
         <GoldDivider style={{ marginTop: 8 }} />
 
-        <FieldWrap icon="list-outline" label="Select Category" required>
-          <View style={styles.pickerWrap}>
+        <FieldWrap icon="list-outline" label="Select Category" required error={fieldErrors.category}>
+          <View style={[styles.pickerWrap, !!fieldErrors.category && styles.invalidOutline]}>
             <View style={styles.pickerIconCol}>
               <Ionicons name="chevron-down-outline" size={14} color={C.gold} />
             </View>
             <Picker
               style={styles.picker}
               selectedValue={pickerValue}
-              onValueChange={(e) => { setPickerValue(e); setCategory(e); }}
+              onValueChange={(e) => {
+                setPickerValue(e);
+                setCategory(e);
+                setFieldErrors((prev) => ({ ...prev, category: null }));
+              }}
               dropdownIconColor={C.gold}
             >
               <Picker.Item label="Select a category…" value="" color={C.mutedText} />
@@ -455,6 +557,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: C.goldBorder, backgroundColor: C.goldLight,
   },
   uploadChipText: { fontSize: 12, fontWeight: "700", color: C.goldDeep },
+  inlineErrorText: { marginTop: 8, fontSize: 11, color: "#C62828", fontWeight: "700", textAlign: "center" },
 
   // Row fields
   rowFields: { flexDirection: "row", width: "100%" },
@@ -470,6 +573,9 @@ const styles = StyleSheet.create({
     borderRightWidth: 1, borderRightColor: C.goldBorder, backgroundColor: C.goldLight,
   },
   picker: { flex: 1, height: 50, color: C.greenDark },
+  invalidOutline: { borderColor: "#C62828", borderWidth: 1.5 },
+  inputFull: { width: "100%", margin: 0, borderRadius: 12, borderColor: C.goldBorder, height: 50 },
+  descriptionInput: { minHeight: 88, textAlignVertical: "top", paddingTop: 12 },
 
   // Featured toggle
   toggleRow: {

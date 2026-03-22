@@ -233,6 +233,7 @@ const Products = () => {
                 <NavChip icon="bag-outline"      label="Orders"     onPress={() => navigation.navigate("Orders")} />
                 <NavChip icon="pricetag-outline" label="Discounts"  onPress={() => navigation.navigate("Discounts")} />
                 <NavChip icon="grid-outline"     label="Categories" onPress={() => navigation.navigate("Categories")} />
+                <NavChip icon="people-outline"   label="Users"      onPress={() => navigation.navigate("Users")} />
               </View>
 
               <TouchableOpacity

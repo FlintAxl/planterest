@@ -90,7 +90,7 @@ const sp = StyleSheet.create({
 });
 
 // ─── Labeled input ────────────────────────────────────────────────────────────
-const FormField = ({ icon, label, value, onChange, placeholder, suffix }) => (
+const FormField = ({ icon, label, value, onChange, placeholder, suffix, error }) => (
   <View style={ff.wrap}>
     <View style={ff.labelRow}>
       <View style={ff.iconPip}><Ionicons name={icon} size={11} color={C.gold} /></View>
@@ -98,7 +98,7 @@ const FormField = ({ icon, label, value, onChange, placeholder, suffix }) => (
       {suffix && <Text style={ff.suffix}>{suffix}</Text>}
     </View>
     <TextInput
-      style={ff.input}
+      style={[ff.input, !!error && ff.inputError]}
       placeholder={placeholder}
       placeholderTextColor="rgba(11,31,16,0.32)"
       keyboardType="numeric"
@@ -106,6 +106,7 @@ const FormField = ({ icon, label, value, onChange, placeholder, suffix }) => (
       onChangeText={onChange}
       maxLength={3}
     />
+    {!!error && <Text style={ff.errorText}>{error}</Text>}
   </View>
 );
 const ff = StyleSheet.create({
@@ -119,6 +120,8 @@ const ff = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, fontWeight: "700", color: C.greenDark,
     shadowColor: "#000", shadowOpacity: 0.04, shadowOffset: { width: 0, height: 2 }, shadowRadius: 4, elevation: 1,
   },
+  inputError: { borderColor: C.red, borderWidth: 1.5 },
+  errorText: { marginTop: 6, fontSize: 11, color: C.red, fontWeight: "700" },
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -134,6 +137,7 @@ const Discounts = () => {
   const [discountPercentage, setDiscountPercentage] = useState("");
   const [discountDays,       setDiscountDays]       = useState("");
   const [applying,           setApplying]           = useState(false);
+  const [fieldErrors,        setFieldErrors]        = useState({});
 
   const safeList        = Array.isArray(productList) ? productList : [];
   const discountedCount = safeList.filter((i) => i?.discount?.percentage > 0).length;
@@ -154,13 +158,30 @@ const Discounts = () => {
       .catch(() => setLoading(false));
   };
 
+  const validateDiscountForm = () => {
+    const errors = {};
+
+    if (!discountPercentage || Number.isNaN(Number(discountPercentage))) {
+      errors.discountPercentage = "Discount percentage is required.";
+    } else if (Number(discountPercentage) < 0 || Number(discountPercentage) > 100) {
+      errors.discountPercentage = "Percentage must be between 0 and 100.";
+    }
+
+    if (!discountDays || Number.isNaN(Number(discountDays))) {
+      errors.discountDays = "Duration in days is required.";
+    } else if (Number(discountDays) < 1) {
+      errors.discountDays = "Duration must be at least 1 day.";
+    }
+
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const applyDiscount = () => {
     if (!selectedProducts.length) { Toast.show({ topOffset: 60, type: "error", text1: "No Products Selected" }); return; }
-    if (!discountPercentage || +discountPercentage < 0 || +discountPercentage > 100) {
-      Toast.show({ topOffset: 60, type: "error", text1: "Invalid Percentage", text2: "Enter a value between 0–100" }); return;
-    }
-    if (!discountDays || +discountDays < 0) {
-      Toast.show({ topOffset: 60, type: "error", text1: "Invalid Duration" }); return;
+    if (!validateDiscountForm()) {
+      Toast.show({ topOffset: 60, type: "error", text1: "Incomplete discount form", text2: "Fill all required fields" });
+      return;
     }
     Alert.alert(
       "Apply Discount?",
@@ -368,7 +389,13 @@ const Discounts = () => {
                   suffix="0–100"
                   placeholder="e.g. 20"
                   value={discountPercentage}
-                  onChange={setDiscountPercentage}
+                  error={fieldErrors.discountPercentage}
+                  onChange={(value) => {
+                    setDiscountPercentage(value);
+                    if (fieldErrors.discountPercentage) {
+                      setFieldErrors((prev) => ({ ...prev, discountPercentage: null }));
+                    }
+                  }}
                 />
               </View>
               <View style={{ flex: 1 }}>
@@ -378,7 +405,13 @@ const Discounts = () => {
                   suffix="days"
                   placeholder="e.g. 7"
                   value={discountDays}
-                  onChange={setDiscountDays}
+                  error={fieldErrors.discountDays}
+                  onChange={(value) => {
+                    setDiscountDays(value);
+                    if (fieldErrors.discountDays) {
+                      setFieldErrors((prev) => ({ ...prev, discountDays: null }));
+                    }
+                  }}
                 />
               </View>
             </View>
@@ -391,6 +424,10 @@ const Discounts = () => {
                   {discountPercentage}% OFF · expires in {discountDays} day{+discountDays !== 1 ? "s" : ""}
                 </Text>
               </View>
+            ) : null}
+
+            {(fieldErrors.discountPercentage || fieldErrors.discountDays) ? (
+              <Text style={styles.validationText}>Please complete both discount fields before applying.</Text>
             ) : null}
 
             {/* Action buttons */}
@@ -571,6 +608,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   previewText: { fontSize: 12, fontWeight: "700", color: C.amber },
+  validationText: { marginBottom: 10, fontSize: 11, fontWeight: "700", color: C.red },
 
   // Buttons
   btnRow:   { flexDirection: "row", gap: 10 },

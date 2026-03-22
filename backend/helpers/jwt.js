@@ -28,7 +28,7 @@ function authJwt() {
                 },
                 {
                     url: /\/api\/v1\/users(.*)/,
-                    methods: ['GET', 'OPTIONS']
+                    methods: ['OPTIONS']
                 },
                 `${api}/users/login`,
                 `${api}/users/google-login`,

@@ -21,6 +21,68 @@ const storage = new CloudinaryStorage({
 });
 
 const uploadOptions = multer({ storage: storage });
+
+const ensureAdmin = (req, res) => {
+    if (!req.auth?.isAdmin) {
+        res.status(403).json({ message: 'Admin access required' });
+        return false;
+    }
+
+    return true;
+};
+
+router.get('/admin/list', async (req, res) => {
+    if (!ensureAdmin(req, res)) {
+        return;
+    }
+
+    const userList = await User.find()
+        .select('name email phone image isAdmin isActive city country');
+
+    if (!userList) {
+        return res.status(500).json({ success: false });
+    }
+
+    return res.status(200).json(userList);
+});
+
+router.put('/admin/:id', async (req, res) => {
+    if (!ensureAdmin(req, res)) {
+        return;
+    }
+
+    const updates = {};
+
+    if (typeof req.body.isAdmin === 'boolean') {
+        updates.isAdmin = req.body.isAdmin;
+    }
+
+    if (typeof req.body.isActive === 'boolean') {
+        updates.isActive = req.body.isActive;
+    }
+
+    if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ message: 'No valid admin updates were provided' });
+    }
+
+    const isSelf = String(req.auth?.userId) === String(req.params.id);
+    if (isSelf && (updates.isAdmin === false || updates.isActive === false)) {
+        return res.status(400).json({ message: 'You cannot demote or deactivate your own account' });
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.params.id,
+        updates,
+        { new: true }
+    ).select('-passwordHash');
+
+    if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+    }
+
+    return res.status(200).json(user);
+});
+
 router.get(`/`, async (req, res) => {
     const userList = await User.find().select('-passwordHash');
 
@@ -66,6 +128,18 @@ router.post('/', async (req, res) => {
 
 router.put('/:id', uploadOptions.single('image'), async (req, res) => {
 
+    const authUserId = req.auth?.userId;
+    const isAdminRequester = req.auth?.isAdmin === true;
+
+    if (!authUserId) {
+        return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const isSelf = String(authUserId) === String(req.params.id);
+    if (!isSelf && !isAdminRequester) {
+        return res.status(403).json({ message: 'Forbidden' });
+    }
+
     const userExist = await User.findById(req.params.id);
     if (!userExist) return res.status(400).send('User not found!');
 
@@ -90,12 +164,17 @@ router.put('/:id', uploadOptions.single('image'), async (req, res) => {
             passwordHash: newPassword,
             phone: req.body.phone || userExist.phone,
             image: imagePath,
-            isAdmin: req.body.isAdmin,
-            street: req.body.street,
-            apartment: req.body.apartment,
-            zip: req.body.zip,
-            city: req.body.city,
-            country: req.body.country,
+            isAdmin: isAdminRequester && typeof req.body.isAdmin === 'boolean'
+                ? req.body.isAdmin
+                : userExist.isAdmin,
+            isActive: isAdminRequester && typeof req.body.isActive === 'boolean'
+                ? req.body.isActive
+                : userExist.isActive,
+            street: req.body.street || userExist.street,
+            apartment: req.body.apartment || userExist.apartment,
+            zip: req.body.zip || userExist.zip,
+            city: req.body.city || userExist.city,
+            country: req.body.country || userExist.country,
         },
         { new: true }
     )
@@ -114,11 +193,16 @@ router.post('/login', async (req, res) => {
         return res.status(400).send('The user not found');
     }
 
+    if (user.isActive === false) {
+        return res.status(403).json({ message: 'Your account is deactivated. Contact an administrator.' });
+    }
+
     if (user && bcrypt.compareSync(req.body.password, user.passwordHash)) {
         const token = jwt.sign(
             {
                 userId: user.id,
-                isAdmin: user.isAdmin
+                isAdmin: user.isAdmin,
+                isActive: user.isActive,
             },
             secret,
             { expiresIn: '1d' }
@@ -176,11 +260,16 @@ router.post('/google-login', async (req, res) => {
             user = await user.save();
         }
 
+        if (user.isActive === false) {
+            return res.status(403).json({ message: 'Your account is deactivated. Contact an administrator.' });
+        }
+
         const secret = process.env.secret;
         const token = jwt.sign(
             {
                 userId: user.id,
                 isAdmin: user.isAdmin,
+                isActive: user.isActive,
             },
             secret,
             { expiresIn: '1d' }

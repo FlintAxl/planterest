@@ -6,6 +6,16 @@ const { OrderItem } = require('../models/order-item');
 const mongoose = require('mongoose');
 const router = express.Router();
 
+const BLOCKED_WORDS_REGEX = /\b(?:f+u+c+k+|s+h+i+t+|b+i+t+c+h+|a+s+s+h+o+l+e+|d+a+m+n+|b+a+s+t+a+r+d+)\b/i;
+
+const hasBlockedWords = (text) => {
+    if (!text || typeof text !== 'string') {
+        return false;
+    }
+
+    return BLOCKED_WORDS_REGEX.test(text);
+};
+
 // Helper function to check if user has purchased a product
 const checkUserPurchase = async (userId, productId) => {
     const userOrders = await Order.find({ user: userId }).populate({ path: 'orderItems' });
@@ -85,6 +95,12 @@ router.post(`/`, async (req, res) => {
                 .send('You can only review products you have purchased');
         }
 
+        if (hasBlockedWords(comment)) {
+            return res
+                .status(400)
+                .json({ message: 'Please remove inappropriate language from your review comment.' });
+        }
+
         // Check for existing review
         const existingReview = await Review.findOne({
             user,
@@ -147,6 +163,12 @@ router.put(`/:id`, async (req, res) => {
         // Ensure the user owns this review
         if (review.user.toString() !== user) {
             return res.status(403).send('You can only edit your own reviews');
+        }
+
+        if (hasBlockedWords(comment)) {
+            return res
+                .status(400)
+                .json({ message: 'Please remove inappropriate language from your review comment.' });
         }
 
         review.rating = rating;

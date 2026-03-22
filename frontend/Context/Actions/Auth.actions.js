@@ -10,8 +10,7 @@ import { removePushTokenOnServer } from "../../assets/common/push-notifications"
 export const SET_CURRENT_USER = "SET_CURRENT_USER";
 
 export const loginUser = (user, dispatch) => {
-
-    fetch(`${baseURL}users/login`, {
+    return fetch(`${baseURL}users/login`, {
         method: "POST",
         body: JSON.stringify(user),
         headers: {
@@ -19,21 +18,43 @@ export const loginUser = (user, dispatch) => {
             "Content-Type": "application/json",
         },
     })
-        .then((res) => {
-            if (!res.ok) {
-                throw new Error(`Login failed with status ${res.status}`);
+        .then(async (res) => {
+            let responseBody = null;
+
+            try {
+                responseBody = await res.json();
+            } catch (_) {
+                responseBody = null;
             }
-            return res.json();
+
+            if (!res.ok) {
+                const backendMessage = responseBody?.message || "Login failed";
+                const isDeactivated =
+                    res.status === 403 &&
+                    String(backendMessage).toLowerCase().includes("deactivated");
+
+                if (isDeactivated) {
+                    throw {
+                        code: "DEACTIVATED",
+                        message: backendMessage,
+                    };
+                }
+
+                throw {
+                    code: "INVALID_CREDENTIALS",
+                    message: backendMessage,
+                };
+            }
+
+            return responseBody;
         })
         .then((data) => {
             if (data && data.token) {
-                // Store token first
-                setAuthToken(data.token)
+                return setAuthToken(data.token)
                     .then(() => {
-                        // Then decode and dispatch
                         const decoded = jwtDecode(data.token);
-                        console.log("Login successful, token stored", decoded);
                         dispatch(setCurrentUser(decoded, user));
+                        return { success: true };
                     })
                     .catch((storageError) => {
                         console.log("Error storing token:", storageError);
@@ -44,27 +65,21 @@ export const loginUser = (user, dispatch) => {
                             text2: "Failed to save authentication token"
                         });
                         logoutUser(dispatch);
+                        throw {
+                            code: "STORAGE_ERROR",
+                            message: "Failed to save authentication token",
+                        };
                     });
-            } else {
-                console.log("Invalid login response", data);
-                Toast.show({
-                    topOffset: 60,
-                    type: "error",
-                    text1: "Invalid response",
-                    text2: "Please try again"
-                });
-                logoutUser(dispatch);
             }
+
+            throw {
+                code: "INVALID_RESPONSE",
+                message: "Invalid response. Please try again.",
+            };
         })
         .catch((err) => {
-            console.log("Login error:", err);
-            Toast.show({
-                topOffset: 60,
-                type: "error",
-                text1: "Please provide correct credentials",
-                text2: ""
-            });
             logoutUser(dispatch);
+            throw err;
         });
 };
 
@@ -83,11 +98,29 @@ export const loginWithGoogle = async (idToken, dispatch) => {
             body: JSON.stringify({ idToken }),
         });
 
-        if (!response.ok) {
-            throw new Error(`Google backend login failed with status ${response.status}`);
+        let data = null;
+        try {
+            data = await response.json();
+        } catch (_) {
+            data = null;
         }
 
-        const data = await response.json();
+        if (!response.ok) {
+            const backendMessage = data?.message || "Google sign-in failed";
+            const isDeactivated =
+                response.status === 403 &&
+                String(backendMessage).toLowerCase().includes("deactivated");
+
+            if (isDeactivated) {
+                throw {
+                    code: "DEACTIVATED",
+                    message: backendMessage,
+                };
+            }
+
+            throw new Error(backendMessage);
+        }
+
         if (!data?.token) {
             throw new Error("Backend did not return an auth token");
         }
@@ -118,6 +151,11 @@ export const loginWithGoogle = async (idToken, dispatch) => {
         });
     } catch (err) {
         console.log("Google login error:", err);
+        if (err?.code === "DEACTIVATED") {
+            logoutUser(dispatch);
+            throw err;
+        }
+
         Toast.show({
             topOffset: 60,
             type: "error",

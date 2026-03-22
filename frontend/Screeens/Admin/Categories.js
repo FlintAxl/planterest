@@ -167,6 +167,7 @@ const Categories = () => {
   const [loading,       setLoading]       = useState(true);
   const [refreshing,    setRefreshing]    = useState(false);
   const [inputFocused,  setInputFocused]  = useState(false);
+  const [categoryError, setCategoryError] = useState("");
 
   const fetchCategories = () => {
     setLoading(true);
@@ -184,7 +185,13 @@ const Categories = () => {
 
   const addCategory = () => {
     const trimmed = (categoryName || "").trim();
-    if (!trimmed) { alert("Please enter a category name"); return; }
+    if (!trimmed) {
+      setCategoryError("Category name is required.");
+      return;
+    }
+
+    setCategoryError("");
+
     axios.post(`${baseURL}categories`, { name: trimmed }, { headers: { Authorization: `Bearer ${token}` } })
       .then((res) => setCategories([...categories, res.data]))
       .catch(() => alert("Error adding category"));
@@ -323,7 +330,7 @@ const Categories = () => {
 
         {/* Input + button row */}
         <View style={styles.inputRow}>
-          <View style={[styles.inputWrap, inputFocused && styles.inputWrapFocused]}>
+          <View style={[styles.inputWrap, inputFocused && styles.inputWrapFocused, !!categoryError && styles.inputWrapError]}>
             <View style={styles.inputIconCol}>
               <Ionicons name="leaf-outline" size={14} color={C.gold} />
             </View>
@@ -332,7 +339,12 @@ const Categories = () => {
               style={styles.textInput}
               placeholder="e.g. Succulents, Ferns…"
               placeholderTextColor={C.mutedText}
-              onChangeText={setCategoryName}
+              onChangeText={(value) => {
+                setCategoryName(value);
+                if (categoryError) {
+                  setCategoryError("");
+                }
+              }}
               onFocus={() => setInputFocused(true)}
               onBlur={() => setInputFocused(false)}
               returnKeyType="done"
@@ -353,6 +365,7 @@ const Categories = () => {
             <Text style={styles.addBtnText}>Add</Text>
           </TouchableOpacity>
         </View>
+        {!!categoryError && <Text style={styles.inlineErrorText}>{categoryError}</Text>}
       </View>
     </SafeAreaView>
   );
@@ -445,6 +458,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: C.goldBorder, overflow: "hidden",
   },
   inputWrapFocused: { borderColor: C.gold, borderWidth: 1.5 },
+  inputWrapError: { borderColor: C.red, borderWidth: 1.5 },
   inputIconCol: {
     width: 38, height: 46, alignItems: "center", justifyContent: "center",
     borderRightWidth: 1, borderRightColor: C.goldBorder, backgroundColor: C.goldLight,
@@ -463,6 +477,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 }, shadowRadius: 7, elevation: 3,
   },
   addBtnText: { fontSize: 14, fontWeight: "900", color: C.greenDark, letterSpacing: 0.3 },
+  inlineErrorText: { marginTop: 8, marginLeft: 2, fontSize: 11, fontWeight: "700", color: C.red },
 });
 
 export default Categories;
