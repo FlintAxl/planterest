@@ -1,6 +1,8 @@
 const express = require('express');
 const { Product } = require('../models/product');
 const { Category } = require('../models/category');
+const { User } = require('../models/user');
+const { sendDiscountPromotionNotification } = require('../helpers/push-notifications');
 const router = express.Router();
 const mongoose = require('mongoose');
 const multer = require('multer');
@@ -94,12 +96,54 @@ router.put('/apply-discount', async (req, res) => {
             return res.status(404).send('No products found with the provided IDs');
         }
 
+        const discountedProducts = await Product.find({ _id: { $in: objectIds } }).select('name discount');
+        const usersWithPushToken = await User.find({ expoPushToken: { $ne: '' } }).select('_id expoPushToken');
+
+        const staleUserIds = [];
+        let pushSentCount = 0;
+
+        if (discountedProducts.length > 0 && usersWithPushToken.length > 0) {
+            const targetProduct = discountedProducts[0];
+            const targetProductId = targetProduct._id;
+            const targetProductName = targetProduct.name || 'A product';
+            const targetDiscount = targetProduct?.discount?.percentage ?? discountPercentage;
+
+            for (const user of usersWithPushToken) {
+                const pushResult = await sendDiscountPromotionNotification({
+                    expoPushToken: user.expoPushToken,
+                    productId: targetProductId,
+                    productName: targetProductName,
+                    discountPercentage: targetDiscount,
+                });
+
+                if (pushResult.sent) {
+                    pushSentCount += 1;
+                }
+
+                if (pushResult.shouldRemoveToken) {
+                    staleUserIds.push(user._id);
+                }
+            }
+        }
+
+        if (staleUserIds.length > 0) {
+            await User.updateMany(
+                { _id: { $in: staleUserIds } },
+                {
+                    expoPushToken: '',
+                    expoPushTokenUpdatedAt: new Date(),
+                }
+            );
+        }
+
         res.send({
             success: true,
             message: `Discount applied to ${result.modifiedCount} product(s)`,
             modifiedCount: result.modifiedCount,
             discountPercentage,
-            endDate
+            endDate,
+            promoPushSentCount: pushSentCount,
+            staleTokensRemoved: staleUserIds.length,
         });
 
     } catch (error) {

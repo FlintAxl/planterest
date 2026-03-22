@@ -11,7 +11,7 @@ const STATUS_LABELS = {
 
 const getStatusLabel = (status) => STATUS_LABELS[String(status)] || 'Updated';
 
-async function sendOrderStatusNotification({ expoPushToken, orderId, status }) {
+async function sendNotification({ expoPushToken, title, body, data = {} }) {
     if (!expoPushToken) {
         return { sent: false, shouldRemoveToken: false };
     }
@@ -24,13 +24,9 @@ async function sendOrderStatusNotification({ expoPushToken, orderId, status }) {
         {
             to: expoPushToken,
             sound: 'default',
-            title: 'Order Status Updated',
-            body: `Your order is now ${getStatusLabel(status)}.`,
-            data: {
-                orderId: String(orderId),
-                status: String(status),
-                screen: 'Order Details',
-            },
+            title,
+            body,
+            data,
         },
     ];
 
@@ -67,4 +63,37 @@ async function sendOrderStatusNotification({ expoPushToken, orderId, status }) {
     return { sent: true, shouldRemoveToken };
 }
 
-module.exports = { sendOrderStatusNotification };
+async function sendOrderStatusNotification({ expoPushToken, orderId, status }) {
+    return sendNotification({
+        expoPushToken,
+        title: 'Order Status Updated',
+        body: `Your order is now ${getStatusLabel(status)}.`,
+        data: {
+            type: 'order-status',
+            orderId: String(orderId),
+            status: String(status),
+            screen: 'Order Details',
+        },
+    });
+}
+
+async function sendDiscountPromotionNotification({ expoPushToken, productId, productName, discountPercentage }) {
+    const safeDiscount = Number(discountPercentage) || 0;
+
+    return sendNotification({
+        expoPushToken,
+        title: 'Plant Deal Alert',
+        body: `${productName} is now ${safeDiscount}% OFF. Tap to view details.`,
+        data: {
+            type: 'discount-promo',
+            productId: String(productId),
+            discountPercentage: String(safeDiscount),
+            screen: 'Product Detail',
+        },
+    });
+}
+
+module.exports = {
+    sendOrderStatusNotification,
+    sendDiscountPromotionNotification,
+};

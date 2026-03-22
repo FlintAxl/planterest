@@ -51,3 +51,17 @@ export const navigateToOrderDetails = ({ order, isCustomer = true }) => {
     },
   });
 };
+
+export const navigateToProductDetails = ({ item }) => {
+  if (!item) {
+    return;
+  }
+
+  navigate('MainTabs', {
+    screen: 'Home',
+    params: {
+      screen: 'Product Detail',
+      params: { item },
+    },
+  });
+};

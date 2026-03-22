@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Dimensions, ScrollView } from 'react-native';
 import { Text } from 'react-native-paper';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -89,6 +89,11 @@ const Payment = ({ route }) => {
       <View style={styles.orbTR} />
       <View style={styles.orbBL} />
       <DotCluster style={{ top: 80, right: 16 }} />
+
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
 
       {/* ── PAGE HEADER ── */}
       <View style={styles.headerCard}>
@@ -224,6 +229,9 @@ const Payment = ({ route }) => {
           style={{ marginLeft: 'auto', opacity: 0.6 }}
         />
       </TouchableOpacity>
+
+      <View style={{ height: 24 }} />
+      </ScrollView>
     </View>
   );
 };
@@ -232,7 +240,8 @@ const Payment = ({ route }) => {
 // STYLES
 // ═══════════════════════════════════════════════════════════════════════════════
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.bg, paddingHorizontal: 14, paddingTop: 14 },
+  container: { flex: 1, backgroundColor: C.bg },
+  scrollContent: { paddingHorizontal: 14, paddingTop: 14, paddingBottom: 8 },
 
   orbTR: { position: 'absolute', top: -80, right: -60, width: 220, height: 220, borderRadius: 110, backgroundColor: 'rgba(201,168,76,0.08)' },
   orbBL: { position: 'absolute', top: 320, left: -70, width: 180, height: 180, borderRadius: 90, backgroundColor: 'rgba(26,92,46,0.07)' },

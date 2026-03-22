@@ -92,7 +92,6 @@ const infoRow = StyleSheet.create({
 // ═══════════════════════════════════════════════════════════════════════════════
 const Confirm = (props) => {
   const context    = useContext(AuthGlobal);
-  const [token,    setToken] = useState();
   const dispatch   = useDispatch();
   const navigation = useNavigation();
 
@@ -107,20 +106,30 @@ const Confirm = (props) => {
   }, 0) ?? 0;
   const hasDiscount = savedAmt > 0;
 
-  const confirmOrder = () => {
-    AsyncStorage.getItem('jwt')
-      .then(res => { setToken(res); })
-      .catch(console.log);
+  const confirmOrder = async () => {
+    try {
+      const jwtToken = await AsyncStorage.getItem('jwt');
 
-    axios.post(`${baseURL}orders`, order, { headers: { Authorization: `Bearer ${token}` } })
-      .then(res => {
-        Toast.show({ topOffset: 60, type: 'success', text1: 'Order Placed!', text2: 'Your plants are on their way 🌿' });
-        setTimeout(() => {
-          dispatch(clearCart(context.stateUser?.user?.userId));
-          navigation.navigate('Cart Screen', { screen: 'Cart' });
-        }, 500);
-      })
-      .catch(() => Toast.show({ topOffset: 60, type: 'error', text1: 'Something went wrong', text2: 'Please try again' }));
+      await axios.post(
+        `${baseURL}orders`,
+        order,
+        { headers: jwtToken ? { Authorization: `Bearer ${jwtToken}` } : {} }
+      );
+
+      Toast.show({ topOffset: 60, type: 'success', text1: 'Order Placed!', text2: 'Your plants are on their way 🌿' });
+      setTimeout(() => {
+        dispatch(clearCart(context.stateUser?.user?.userId));
+        navigation.navigate('Cart Screen', { screen: 'Cart' });
+      }, 500);
+    } catch (error) {
+      const serverMessage = error?.response?.data?.message || error?.response?.data;
+      Toast.show({
+        topOffset: 60,
+        type: 'error',
+        text1: typeof serverMessage === 'string' ? serverMessage : 'Something went wrong',
+        text2: 'Please try again',
+      });
+    }
   };
 
   return (

@@ -90,9 +90,15 @@ const Cart = () => {
   const savings = originalTotal - total;
 
   // ── Item row ─────────────────────────────────────────────────────────────────
-  const renderItem = ({ item }) => (
-    <TouchableHighlight underlayColor="rgba(201,168,76,0.05)" style={row.wrapper}>
-      <View style={row.card}>
+  const renderItem = ({ item }) => {
+    const maxStock = Number(item.countInStock);
+    const hasStockLimit = Number.isFinite(maxStock) && maxStock >= 0;
+    const currentQuantity = item.quantity || 1;
+    const isAtStockLimit = hasStockLimit && currentQuantity >= maxStock;
+
+    return (
+      <TouchableHighlight underlayColor="rgba(201,168,76,0.05)" style={row.wrapper}>
+        <View style={row.card}>
         <View style={row.leftAccent} />
 
         <View style={row.imageWrap}>
@@ -110,6 +116,7 @@ const Cart = () => {
         <View style={row.info}>
           <Text style={row.name} numberOfLines={2}>{item.name}</Text>
           <Text style={row.desc} numberOfLines={1}>{item.description || 'Premium quality plant'}</Text>
+          {hasStockLimit && <Text style={row.stockText}>Stock: {maxStock}</Text>}
           <View style={row.priceRow}>
             <Text style={row.price}>${item.price}</Text>
             {item.originalPrice && (
@@ -125,8 +132,9 @@ const Cart = () => {
 
         <View style={row.stepper}>
           <TouchableOpacity
-            style={[row.stepBtn, row.stepBtnAdd]}
+            style={[row.stepBtn, row.stepBtnAdd, isAtStockLimit && row.stepBtnDisabled]}
             onPress={() => dispatch(updateQuantity(item._id || item.id, (item.quantity || 1) + 1, currentUserId))}
+            disabled={isAtStockLimit}
           >
             <Text style={[row.stepText, { color: C.greenDark }]}>+</Text>
           </TouchableOpacity>
@@ -140,9 +148,10 @@ const Cart = () => {
             <Text style={row.stepText}>−</Text>
           </TouchableOpacity>
         </View>
-      </View>
-    </TouchableHighlight>
-  );
+        </View>
+      </TouchableHighlight>
+    );
+  };
 
   // ── Hidden delete ─────────────────────────────────────────────────────────────
   const renderHiddenItem = (data) => (
@@ -304,6 +313,7 @@ const row = StyleSheet.create({
   info:          { flex: 1 },
   name:          { fontSize: 13, fontWeight: '900', color: C.greenDark, marginBottom: 3, lineHeight: 17 },
   desc:          { fontSize: 11, color: C.mutedText, marginBottom: 6, fontStyle: 'italic' },
+  stockText:     { fontSize: 10, color: C.mutedText, marginBottom: 6, fontWeight: '600' },
   priceRow:      { flexDirection: 'row', alignItems: 'center', gap: 6 },
   price:         { fontSize: 15, fontWeight: '900', color: C.goldDeep },
   originalPrice: { fontSize: 11, color: C.mutedText, textDecorationLine: 'line-through' },
@@ -316,6 +326,7 @@ const row = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   stepBtnAdd: { backgroundColor: C.goldLight, borderColor: C.goldBorder },
+  stepBtnDisabled: { opacity: 0.45 },
   stepText:   { fontSize: 16, fontWeight: '900', color: C.goldDeep, lineHeight: 18 },
   qtyBox: {
     backgroundColor: C.goldLight, borderRadius: 7,

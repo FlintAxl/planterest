@@ -5,6 +5,42 @@ const { Product } = require('../models/product');
 const { User } = require('../models/user');
 const { sendOrderStatusNotification } = require('../helpers/push-notifications');
 const router = express.Router();
+const mongoose = require('mongoose');
+
+const normalizeIncomingOrderItems = (orderItems = []) => {
+    if (!Array.isArray(orderItems) || orderItems.length === 0) {
+        throw new Error('Order must contain at least one item');
+    }
+
+    return orderItems.map((orderItem) => {
+        const rawProductId = orderItem?.product?._id || orderItem?.product?.id || orderItem?.product || orderItem?._id || orderItem?.id;
+        const quantity = Number(orderItem?.quantity);
+
+        if (!rawProductId || !mongoose.isValidObjectId(rawProductId)) {
+            throw new Error('Invalid product in order items');
+        }
+
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+            throw new Error('Invalid quantity in order items');
+        }
+
+        return {
+            product: rawProductId.toString(),
+            quantity,
+        };
+    });
+};
+
+const groupOrderItemsByProduct = (orderItems = []) => {
+    const grouped = new Map();
+
+    for (const item of orderItems) {
+        const previousQuantity = grouped.get(item.product) || 0;
+        grouped.set(item.product, previousQuantity + item.quantity);
+    }
+
+    return grouped;
+};
 
 const computeOrderTotalFromItems = async (orderItems = []) => {
     let total = 0;
@@ -85,40 +121,86 @@ router.get(`/:id`, async (req, res) => {
 })
 
 router.post('/', async (req, res) => {
-    const orderItemsIds = Promise.all(req.body.orderItems.map(async (orderItem) => {
-        let newOrderItem = new OrderItem({
-            quantity: orderItem.quantity,
-            product: orderItem.product || orderItem._id || orderItem.id
-        })
+    const session = await mongoose.startSession();
 
-        newOrderItem = await newOrderItem.save();
-        return newOrderItem.id;
-    }))
+    try {
+        session.startTransaction();
 
-    const orderItemsIdsResolved = await orderItemsIds;
+        const normalizedItems = normalizeIncomingOrderItems(req.body.orderItems || []);
+        const groupedItems = groupOrderItemsByProduct(normalizedItems);
+        const productIds = Array.from(groupedItems.keys());
 
-    const totalPrice = Number(req.body.totalPrice);
-    const computedTotalPrice = await computeOrderTotalFromItems(req.body.orderItems || []);
-    const finalTotalPrice = Number.isFinite(totalPrice) && totalPrice > 0 ? totalPrice : computedTotalPrice;
+        const products = await Product.find({ _id: { $in: productIds } })
+            .select('price countInStock')
+            .session(session);
 
-    let order = new Order({
-        orderItems: orderItemsIdsResolved,
-        shippingAddress1: req.body.shippingAddress1,
-        shippingAddress2: req.body.shippingAddress2,
-        city: req.body.city,
-        zip: req.body.zip,
-        country: req.body.country,
-        phone: req.body.phone,
-        status: req.body.status,
-        totalPrice: finalTotalPrice,
-        user: req.body.user,
-    })
-    order = await order.save();
+        if (products.length !== productIds.length) {
+            throw new Error('One or more products do not exist');
+        }
 
-    if (!order)
-        return res.status(400).send('the order cannot be created!')
+        const productById = new Map(products.map((product) => [product._id.toString(), product]));
 
-    return res.status(201).json(order)
+        for (const [productId, quantity] of groupedItems.entries()) {
+            const product = productById.get(productId);
+            if (!product || Number(product.countInStock) < quantity) {
+                throw new Error('Insufficient stock for one or more products');
+            }
+        }
+
+        for (const [productId, quantity] of groupedItems.entries()) {
+            const updateStockResult = await Product.updateOne(
+                { _id: productId, countInStock: { $gte: quantity } },
+                { $inc: { countInStock: -quantity } },
+                { session }
+            );
+
+            if (updateStockResult.modifiedCount !== 1) {
+                throw new Error('Stock update conflict. Please try again.');
+            }
+        }
+
+        const createdOrderItems = await OrderItem.insertMany(
+            normalizedItems.map((item) => ({
+                quantity: item.quantity,
+                product: item.product,
+            })),
+            { session }
+        );
+
+        const orderItemsIdsResolved = createdOrderItems.map((orderItem) => orderItem._id);
+
+        const computedTotalPrice = normalizedItems.reduce((sum, item) => {
+            const product = productById.get(item.product);
+            const unitPrice = Number(product?.price) || 0;
+            return sum + (unitPrice * item.quantity);
+        }, 0);
+
+        const totalPrice = Number(req.body.totalPrice);
+        const finalTotalPrice = Number.isFinite(totalPrice) && totalPrice > 0
+            ? totalPrice
+            : Number(computedTotalPrice.toFixed(2));
+
+        const [order] = await Order.create([{
+            orderItems: orderItemsIdsResolved,
+            shippingAddress1: req.body.shippingAddress1,
+            shippingAddress2: req.body.shippingAddress2,
+            city: req.body.city,
+            zip: req.body.zip,
+            country: req.body.country,
+            phone: req.body.phone,
+            status: req.body.status,
+            totalPrice: finalTotalPrice,
+            user: req.body.user,
+        }], { session });
+
+        await session.commitTransaction();
+        return res.status(201).json(order);
+    } catch (error) {
+        await session.abortTransaction();
+        return res.status(400).json({ success: false, message: error.message || 'the order cannot be created!' });
+    } finally {
+        session.endSession();
+    }
 })
 
 
@@ -161,16 +243,35 @@ router.put('/:id', async (req, res) => {
 })
 
 router.put('/:id/cancel', async (req, res) => {
+    const session = await mongoose.startSession();
+
     try {
-        const order = await Order.findById(req.params.id);
-        
+        session.startTransaction();
+
+        const order = await Order.findById(req.params.id)
+            .populate('orderItems')
+            .session(session);
+
         if (!order) {
+            await session.abortTransaction();
             return res.status(404).json({ success: false, message: 'Order not found' });
         }
 
         // Check if order is in pending status (status "3")
         if (order.status !== "3") {
+            await session.abortTransaction();
             return res.status(400).json({ success: false, message: 'Only pending orders can be cancelled' });
+        }
+
+        const normalizedItems = normalizeIncomingOrderItems(order.orderItems || []);
+        const groupedItems = groupOrderItemsByProduct(normalizedItems);
+
+        for (const [productId, quantity] of groupedItems.entries()) {
+            await Product.updateOne(
+                { _id: productId },
+                { $inc: { countInStock: quantity } },
+                { session }
+            );
         }
 
         const updatedOrder = await Order.findByIdAndUpdate(
@@ -180,12 +281,17 @@ router.put('/:id/cancel', async (req, res) => {
                 cancelReason: req.body.cancelReason,
                 cancelledAt: new Date()
             },
-            { new: true }
+            { new: true, session }
         );
+
+        await session.commitTransaction();
 
         res.status(200).json(updatedOrder);
     } catch (error) {
+        await session.abortTransaction();
         res.status(500).json({ success: false, error: error.message });
+    } finally {
+        session.endSession();
     }
 })
 

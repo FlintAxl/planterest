@@ -19,6 +19,7 @@ import axios from 'axios';
 import baseURL from './assets/common/baseurl';
 import {
   flushNavigationQueue,
+  navigateToProductDetails,
   navigateToOrderDetails,
   navigateToUserLogin,
   navigationRef,
@@ -65,7 +66,7 @@ const CartHydrator = () => {
   }, [context.stateUser?.isAuthenticated, context.stateUser?.user?.userId]);
 
   useEffect(() => {
-    const openOrderDetailsFromNotification = async (response) => {
+    const openDetailsFromNotification = async (response) => {
       try {
         const notificationId = response?.notification?.request?.identifier;
 
@@ -79,37 +80,51 @@ const CartHydrator = () => {
 
         const data = response?.notification?.request?.content?.data || {};
         const orderId = data?.orderId ? String(data.orderId) : null;
+        const productId = data?.productId ? String(data.productId) : null;
         const targetScreen = data?.screen ? String(data.screen) : null;
+        const notificationType = data?.type ? String(data.type) : null;
 
-        if (!orderId) {
+        const isOrderNotification =
+          !!orderId && (targetScreen === 'Order Details' || notificationType === 'order-status');
+        const isDiscountNotification =
+          !!productId && (targetScreen === 'Product Detail' || notificationType === 'discount-promo');
+
+        if (!isOrderNotification && !isDiscountNotification) {
           return;
         }
 
-        if (targetScreen && targetScreen !== 'Order Details') {
+        if (isOrderNotification) {
+          if (stateUserRef.current?.isAuthenticated !== true) {
+            navigateToUserLogin();
+            return;
+          }
+
+          const authToken = await getAuthToken();
+
+          if (!authToken) {
+            navigateToUserLogin();
+            return;
+          }
+
+          const orderResponse = await axios.get(`${baseURL}orders/${orderId}`, {
+            headers: { Authorization: `Bearer ${authToken}` },
+          });
+
+          if (!orderResponse?.data) {
+            return;
+          }
+
+          navigateToOrderDetails({ order: orderResponse.data, isCustomer: true });
           return;
         }
 
-        if (stateUserRef.current?.isAuthenticated !== true) {
-          navigateToUserLogin();
+        const productResponse = await axios.get(`${baseURL}products/${productId}`);
+
+        if (!productResponse?.data) {
           return;
         }
 
-        const authToken = await getAuthToken();
-
-        if (!authToken) {
-          navigateToUserLogin();
-          return;
-        }
-
-        const orderResponse = await axios.get(`${baseURL}orders/${orderId}`, {
-          headers: { Authorization: `Bearer ${authToken}` },
-        });
-
-        if (!orderResponse?.data) {
-          return;
-        }
-
-        navigateToOrderDetails({ order: orderResponse.data, isCustomer: true });
+        navigateToProductDetails({ item: productResponse.data });
       } catch (error) {
         console.log('Failed to process notification tap', error?.message || error);
       }
@@ -117,14 +132,14 @@ const CartHydrator = () => {
 
     const listenerSubscription = Notifications.addNotificationResponseReceivedListener(
       (response) => {
-        openOrderDetailsFromNotification(response);
+        openDetailsFromNotification(response);
       }
     );
 
     Notifications.getLastNotificationResponseAsync()
       .then((response) => {
         if (response) {
-          openOrderDetailsFromNotification(response);
+          openDetailsFromNotification(response);
         }
       })
       .catch((error) => {

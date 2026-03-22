@@ -258,13 +258,6 @@ const UserProfile = () => {
         contentContainerStyle={styles.scrollContent}
         style={{ backgroundColor: C.pageBg }}
       >
-        {/* Stats */}
-        <View style={styles.statsRow}>
-          <StatPill icon="leaf-outline"  value="12"  label="Plants" />
-          <StatPill icon="bag-outline"   value="8"   label="Orders" />
-          <StatPill icon="star-outline"  value="4.8" label="Rating" />
-        </View>
-
         {/* Personal Info Card — WHITE with gold outline */}
         <View style={styles.card}>
           <GoldBar />
@@ -338,9 +331,7 @@ const UserProfile = () => {
           </View>
           <GoldDivider style={{ marginTop: 8 }} />
 
-          <ActionRow icon="bag-outline"      label="My Orders"  onPress={() => navigation.navigate('My Orders')} />
-          <ActionRow icon="heart-outline"    label="Favourites" onPress={() => {}} />
-          <ActionRow icon="settings-outline" label="Settings"   onPress={() => {}} last />
+          <ActionRow icon="bag-outline"      label="My Orders"  onPress={() => navigation.navigate('My Orders')} last />
         </View>
 
         {/* Sign Out */}
